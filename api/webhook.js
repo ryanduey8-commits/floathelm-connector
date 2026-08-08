@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv';
+import { createClient } from 'redis';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -14,15 +14,19 @@ export default async function handler(req, res) {
   const timestamp = new Date().toISOString();
   const key = `event:${timestamp}:${Math.random().toString(36).slice(2, 8)}`;
 
+  const redis = createClient({ url: process.env.REDIS_URL });
+
   try {
-    await kv.set(key, {
+    await redis.connect();
+    await redis.set(key, JSON.stringify({
       event_type: eventType,
       received_at: timestamp,
       location_id: payload.location_id || null,
       location_title: payload.location_title || null,
       payload,
-    });
-    await kv.lpush('event_index', key);
+    }));
+    await redis.lPush('event_index', key);
+    await redis.quit();
 
     return res.status(200).json({ ok: true });
   } catch (err) {
